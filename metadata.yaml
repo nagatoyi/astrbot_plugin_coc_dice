@@ -1,6 +1,6 @@
 name: astrbot_plugin_coc_dice
 display_name: 自用coc骰子
-version: 1.1.8
+version: 1.1.9
 author: ishu
 desc: 支持任意多面骰与智能属性检定的双模 LLM 跑团插件
 repo: https://github.com/nagatoyi/astrbot_plugin_coc_dice

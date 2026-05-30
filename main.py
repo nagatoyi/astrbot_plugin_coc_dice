@@ -2,12 +2,12 @@ import random
 import re
 from astrbot.api.all import *
 
-@register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "v1.1.0")
+@register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "1.1.0")
 class TRPGLLMDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    @on_decor()
+    @event_message_type()
     async def on_group_msg(self, event: MessageEvent):
         msg = event.message_str.strip()
         
@@ -31,12 +31,10 @@ class TRPGLLMDicePlugin(Star):
             modifier_sign = dice_match.group(3)
             modifier_val = int(dice_match.group(4)) if dice_match.group(4) else 0
             
-            # 安全防刷屏限制
             if num > 20 or sides > 1000:
                 yield event.plain_result(f"❌ @{sender_name} 骰子数量过多或面数过大，法则崩溃了。")
                 return
                 
-            # 执行纯掷骰计算
             rolls = [random.randint(1, sides) for _ in range(num)]
             total = sum(rolls)
             if modifier_sign == '+':
@@ -47,10 +45,10 @@ class TRPGLLMDicePlugin(Star):
             rolls_detail = " + ".join(map(str, rolls))
             mod_str = f" {modifier_sign} {modifier_val}" if modifier_sign else ""
             
-            # 视觉即时反馈
+            # 给出即时的肉眼反馈
             yield event.plain_result(f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)")
             
-            # 构造投喂给大模型的小纸条（纯数值结果提示）
+            # 构造投喂给大模型的小纸条（追加到消息末尾）
             llm_injection = (
                 f"\n\n【系统绝对指令（KP请执行）】:\n"
                 f"当前调查员 @{sender_name} 进行了纯骰子投掷，公式为：【{raw_cmd}】。\n"
@@ -68,16 +66,14 @@ class TRPGLLMDicePlugin(Star):
             return
 
         # =================================================================
-        # 模式 B：智能匹配属性/技能检定 (如: // 力量检定, // 侦查, // 手枪)
+        # 模式 B：智能匹配属性/技能检定 (如: // 力量检定, // 侦查)
         # =================================================================
         skill_target = re.sub(r'(检定|掷骰|骰一下)$', '', raw_cmd).strip()
         if skill_target:
-            # 属性检定默认使用百分骰 (1d100)
             dice_point = random.randint(1, 100)
             
             yield event.plain_result(f"🎲 @{sender_name} 正在申请【{skill_target}】检定... (1d100 结果已密报给 KP)")
             
-            # 构造投喂给大模型的小纸条（需要和知识库进行对撞判定）
             llm_injection = (
                 f"\n\n【系统绝对指令（KP请执行）】:\n"
                 f"当前调查员 @{sender_name} 正在申请进行【{skill_target}】属性/技能检定。\n"

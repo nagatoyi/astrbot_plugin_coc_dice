@@ -2,14 +2,14 @@ import random
 import re
 from astrbot.api.all import *
 
-@register("astrbot_plugin_coc_dice", "ishu", "纯净活泼的专属投掷骰娘插件", "1.3.0")
+@register("astrbot_plugin_coc_dice", "ishu", "纯净活泼的专属投掷骰娘插件", "1.3.1")
 class CocDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    # 唯一的指令触发词：roll，并使用正确的 AstrMessageEvent 类型
+    # 关键修复点：为 *args 也加上了 : str 类型声明，彻底满足底层解析器要求
     @command("roll")
-    async def do_roll(self, event: AstrMessageEvent, *args):
+    async def do_roll(self, event: AstrMessageEvent, *args: str):
         raw_cmd = " ".join(args).strip()
         sender_name = event.get_sender_name()
         

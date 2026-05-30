@@ -23,7 +23,7 @@ class TRPGLLMDicePlugin(Star):
             return
 
         # =================================================================
-        # 模式 A：匹配多面骰公式 (如: // 1d100)
+        # 模式 A：匹配多面骰公式 (如: // 1d100, // 2d6)
         # =================================================================
         dice_match = re.match(r'^(\d+)[dD](\d+)(?:\s*([\+\-])\s*(\d+))?$', raw_cmd)
         if dice_match:
@@ -48,7 +48,7 @@ class TRPGLLMDicePlugin(Star):
             
             yield event.plain_result(f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)")
             
-            # 【修复点】在系统指令每一行前加上 //，防止大模型误判为场外发言
+            # 系统指令每一行前加上 //，完美兼容大模型的唤醒词前缀过滤
             llm_injection = (
                 f"\n//\n"
                 f"// 【系统绝对指令（KP请执行）】:\n"
@@ -67,7 +67,7 @@ class TRPGLLMDicePlugin(Star):
             return
 
         # =================================================================
-        # 模式 B：智能匹配属性/技能检定 (如: // 力量)
+        # 模式 B：智能匹配属性/技能检定 (如: // 力量, // 侦查检定)
         # =================================================================
         skill_target = re.sub(r'(检定|掷骰|骰一下)$', '', raw_cmd).strip()
         if skill_target:
@@ -75,7 +75,7 @@ class TRPGLLMDicePlugin(Star):
             
             yield event.plain_result(f"🎲 @{sender_name} 正在申请【{skill_target}】检定... (1d100 结果已密报给 KP)")
             
-            # 【修复点】在系统指令每一行前加上 // 锚定符，直接对齐 AI 的唤醒与判定人格
+            # 系统指令每一行前加上 // 锚定符，直接对齐 AI 要求的唤醒规则
             llm_injection = (
                 f"\n//\n"
                 f"// 【系统绝对指令（KP请执行）】:\n"

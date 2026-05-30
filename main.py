@@ -3,12 +3,11 @@ import re
 from astrbot.api.all import *
 from astrbot.api.event.filter import *
 
-@register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "1.1.0")
+@register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "1.1.1")
 class TRPGLLMDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    # 核心修复：最新版标准注解为 event_message_type，配合新版事件实体 AstrMessageEvent
     @event_message_type(EventMessageType.ALL)
     async def on_group_msg(self, event: AstrMessageEvent):
         msg = event.message_str.strip()
@@ -24,7 +23,7 @@ class TRPGLLMDicePlugin(Star):
             return
 
         # =================================================================
-        # 模式 A：匹配多面骰公式 (如: // 1d100, // 2d6, // 1d4+1, // 3d6+2)
+        # 模式 A：匹配多面骰公式 (如: // 1d100)
         # =================================================================
         dice_match = re.match(r'^(\d+)[dD](\d+)(?:\s*([\+\-])\s*(\d+))?$', raw_cmd)
         if dice_match:
@@ -47,28 +46,28 @@ class TRPGLLMDicePlugin(Star):
             rolls_detail = " + ".join(map(str, rolls))
             mod_str = f" {modifier_sign} {modifier_val}" if modifier_sign else ""
             
-            # 给玩家提供肉眼可见的即时丢骰提示
             yield event.plain_result(f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)")
             
-            # 注入大模型上下文的隐形纸条（修改 message_str 后不阻断，继续下发给LLM）
+            # 【修复点】在系统指令每一行前加上 //，防止大模型误判为场外发言
             llm_injection = (
-                f"\n\n【系统绝对指令（KP请执行）】:\n"
-                f"当前调查员 @{sender_name} 进行了纯骰子投掷，公式为：【{raw_cmd}】。\n"
-                f"后台实体骰娘摇出的真实细节为：[ {rolls_detail} ]{mod_str}，最终计算总和为：【 {total} 】。\n"
-                f"请你（作为KP）立即在回复最前端明确公示这个投掷结果：\n"
-                f"【🎲 KP 掷骰公告】\n"
-                f"调查员：@{sender_name}\n"
-                f"投掷动作：{raw_cmd}\n"
-                f"最终点数：{total}\n"
-                f"====================\n"
-                f"然后根据这个数值（如伤害扣除、理智丧失等）继续无缝续写接下来的跑团剧情。"
+                f"\n//\n"
+                f"// 【系统绝对指令（KP请执行）】:\n"
+                f"// 调查员 @{sender_name} 进行了纯骰子投掷：【{raw_cmd}】。\n"
+                f"// 骰娘摇出的真实点数总和为：【 {total} 】 (细节: [ {rolls_detail} ]{mod_str})。\n"
+                f"// 请KP立即在回复最前端明确公示这个投掷结果并严格使用它：\n"
+                f"// 【🎲 KP 掷骰公告】\n"
+                f"// 调查员：@{sender_name}\n"
+                f"// 投掷动作：{raw_cmd}\n"
+                f"// 最终点数：{total}\n"
+                f"// ====================\n"
+                f"// 请根据此数字无缝推进后续的剧情描写。"
             )
             
             event.message_obj.message_str += llm_injection
             return
 
         # =================================================================
-        # 模式 B：智能匹配属性/技能检定 (如: // 力量检定, // 侦查)
+        # 模式 B：智能匹配属性/技能检定 (如: // 力量)
         # =================================================================
         skill_target = re.sub(r'(检定|掷骰|骰一下)$', '', raw_cmd).strip()
         if skill_target:
@@ -76,19 +75,20 @@ class TRPGLLMDicePlugin(Star):
             
             yield event.plain_result(f"🎲 @{sender_name} 正在申请【{skill_target}】检定... (1d100 结果已密报给 KP)")
             
+            # 【修复点】在系统指令每一行前加上 // 锚定符，直接对齐 AI 的唤醒与判定人格
             llm_injection = (
-                f"\n\n【系统绝对指令（KP请执行）】:\n"
-                f"当前调查员 @{sender_name} 正在申请进行【{skill_target}】属性/技能检定。\n"
-                f"后台骰娘已为他摇出了 1d100 百分骰，结果为：【 {dice_point} 】。\n"
-                f"请你（作为KP）立即查阅你的[知识库/上下文记忆]中关于 @{sender_name} 的【{skill_target}】属性数值，并按 COC 7th 标准判定成功等级（大成功/成功/困难成功/极难成功/失败/大失败）。\n"
-                f"请立即在回复最前端明确公示判定结果：\n"
-                f"【🎲 KP 检定裁决】\n"
-                f"调查员：@{sender_name}\n"
-                f"检定科目：【{skill_target}】（当前属性值：请查阅你的知识库填写）\n"
-                f"命运骰点：1d100 = [ {dice_point} ]\n"
-                f"裁决等级：[请根据对撞结果填写]\n"
-                f"====================\n"
-                f"然后无缝续写后续剧情发展，推进游戏流程。"
+                f"\n//\n"
+                f"// 【系统绝对指令（KP请执行）】:\n"
+                f"// 调查员 @{sender_name} 正在申请进行【{skill_target}】属性检定。\n"
+                f"// 后台实体骰娘已为他摇出了 1d100 结果：【 {dice_point} 】。\n"
+                f"// 请KP立即查阅知识库中 @{sender_name} 的【{skill_target}】数值，按 COC 7th 标准在回复最前端公示：\n"
+                f"// 【🎲 KP 检定裁决】\n"
+                f"// 调查员：@{sender_name}\n"
+                f"// 检定科目：【{skill_target}】\n"
+                f"// 命运骰点：1d100 = [ {dice_point} ]\n"
+                f"// 裁决等级：[由KP比对知识库后得出]\n"
+                f"// ====================\n"
+                f"// 请直接以此为开篇，并无缝续写后续剧情发展，推进游戏流程。"
             )
             
             event.message_obj.message_str += llm_injection

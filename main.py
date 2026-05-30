@@ -1,14 +1,15 @@
 import random
 import re
 from astrbot.api.all import *
+from astrbot.api.event import filter # 引入底层显式过滤器组件，确保没有命名错误
 
 @register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "1.1.0")
 class TRPGLLMDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    # 核心修复：使用官方最稳固的 @on(MessageEvent) 来全局捕获消息事件，避免装饰器缺少参数
-    @on(MessageEvent)
+    # 使用框架内最核心、且必然存在的全局消息事件过滤器注解
+    @filter.all
     async def on_group_msg(self, event: MessageEvent):
         msg = event.message_str.strip()
         

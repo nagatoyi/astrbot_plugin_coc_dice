@@ -9,7 +9,7 @@ class CocDicePlugin(Star):
 
     # 唯一的指令触发词：roll
     @command("roll")
-    async def do_roll(self, event: Event, *args):
+    async def do_roll(self, event, *args):
         raw_cmd = " ".join(args).strip()
         sender_name = event.get_sender_name()
         

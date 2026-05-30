@@ -7,9 +7,9 @@ class CocDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    # 唯一的指令触发词：roll
+    # 唯一的指令触发词：roll，并使用正确的 AstrMessageEvent 类型
     @command("roll")
-    async def do_roll(self, event, *args):
+    async def do_roll(self, event: AstrMessageEvent, *args):
         raw_cmd = " ".join(args).strip()
         sender_name = event.get_sender_name()
         

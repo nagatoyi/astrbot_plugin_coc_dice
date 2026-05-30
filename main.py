@@ -3,93 +3,87 @@ import re
 from astrbot.api.all import *
 
 @register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "1.2.0")
-class TRPGLLMDicePlugin(Star):
+class CocDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
+    # 唯一的指令触发词：roll
     @command("roll")
-    async def do_roll(self, event: AstrMessageEvent, args: str = ""):
+    async def do_roll(self, event: MessageEvent, *args):
+        # 提取 roll 后面的全部参数
+        raw_cmd = " ".join(args).strip()
         sender_name = event.get_sender_name()
-        raw_cmd = args.strip()
-
+        
         if not raw_cmd:
-            yield event.plain_result(f"❌ @{sender_name} 请输入具体投掷内容。")
+            yield event.plain_result(f"❌ @{sender_name} 缺少行动指令，请提供检定内容，例如 /roll 1d100 或 /roll 侦查检定")
             return
 
+        # =================================================================
+        # 模式 A：匹配多面骰公式 (如: 1d100, 2d6+1)
+        # =================================================================
+        dice_match = re.match(r'^(\d+)[dD](\d+)(?:\s*([+-])\s*(\d+))?$', raw_cmd)
         kp_instruction = ""
-        display_action = ""
-
-        # =================================================================
-        # 模式 A：匹配标准多面骰公式
-        # =================================================================
-        dice_match = re.match(r'^(\d+)[dD](\d+)(?:\s*([\+\-])\s*(\d+))?$', raw_cmd)
+        
         if dice_match:
             num = int(dice_match.group(1))
             sides = int(dice_match.group(2))
             modifier_sign = dice_match.group(3)
             modifier_val = int(dice_match.group(4)) if dice_match.group(4) else 0
             
+            if num > 20 or sides > 1000:
+                yield event.plain_result(f"❌ @{sender_name} 骰子数量过多或面数过大，法则崩溃了。")
+                return
+                
             rolls = [random.randint(1, sides) for _ in range(num)]
             total = sum(rolls)
-            if modifier_sign == '+': total += modifier_val
-            elif modifier_sign == '-': total -= modifier_val
+            if modifier_sign == '+':
+                total += modifier_val
+            elif modifier_sign == '-':
+                total -= modifier_val
                 
-            display_action = f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)"
+            yield event.plain_result(f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)")
             
+            # 模式 A 的大模型注入词 (采用强约束与伪装格式)
             kp_instruction = (
-                f"【系统提示：调查员 @{sender_name} 进行了纯骰子投掷【{raw_cmd}】。"
-                f"后台真实骰娘计算出的最终总和为【 {total} 】。"
-                f"请你作为 KP，必须严格且仅以下面这种格式作为你回复的最前端："
+                f"\n\n[TRPG_ENGINE_NOTICE]\n"
+                f"系统密报：调查员 @{sender_name} 进行了纯骰子投掷：【{raw_cmd}】。\n"
+                f"后台真实骰娘计算出的最终总和为：【 {total} 】。\n"
+                f"你作为 KP 必须无条件信任并接收此数据，立刻在回复的最前端输出：\n"
                 f"本次{sender_name}:{raw_cmd}的结果是{total}\n"
-                f"随后请在此行下方换行，并根据该数字客观续写后续剧本内容。】"
+                f"随后换行，并根据该数字客观续写后续剧本内容。"
             )
 
         # =================================================================
-        # 模式 B：智能匹配属性/技能检定
+        # 模式 B：智能匹配属性/技能检定 (如: 力量检定, 侦查 寻找线索)
         # =================================================================
         else:
-            skill_match = re.match(r'^([\u4e00-\u9fa5]{2,4})(检定|掷骰|骰一下)?(?:\s+(.*))?$', raw_cmd)
+            # 提取技能目标，剥离后面的动作闲聊
+            skill_match = re.match(r'^([\u4e00-\u9fa5]{2,4})(?:检定|掷骰|骰一下)?(?:\s+(.*))?$', raw_cmd)
             if skill_match:
-                skill_target = skill_match.group(1) 
-                action_desc = skill_match.group(3) if skill_match.group(3) else "" 
-                dice_point = random.randint(1, 100)
-                
-                display_action = f"🎲 @{sender_name} 正在申请 【{skill_target}】 检定... (1d100 结果已密报给 KP)"
-                
-                kp_instruction = (
-                    f"【系统提示：调查员 @{sender_name} 正在申请进行【{skill_target}】属性对撞检定。动作描述: {action_desc}。"
-                    f"后台实体骰娘摇出的 1d100 命运数字为【 {dice_point} 】。"
-                    f"请你作为 KP，必须严格且仅以下面这种格式作为你回复的最前端："
-                    f"本次{sender_name}:{skill_target}检定的结果是{dice_point}\n"
-                    f"请紧接着去你的知识库里比对该调查员的属性，并在下方换行判定其成功等级（大成功/成功/失败等），然后推进游戏剧情。】"
-                )
-
-        if kp_instruction:
-            # 1. 立即把骰娘的结果先发出来
-            yield event.plain_result(display_action)
+                skill_target = skill_match.group(1)
+            else:
+                skill_target = raw_cmd.split()  # 兜底提取第一个词作为科目
             
-            # 2. 核心突破：直接调用 AstrBot 的底层 LLM 接口来获取 AI KP 的回复
-            # 这样可以绕过事件流拦截，强行让 AI 推进剧情
-            try:
-                # 尝试从 context 获取当前群聊/私聊的底层 llm 处理器
-                provider = self.context.get_llm_provider() if hasattr(self.context, "get_llm_provider") else None
-                if provider:
-                    # 将玩家的原本陈述与后台强指令组合
-                    prompt = f"玩家动作: {raw_cmd}\n\n{kp_instruction}"
-                    
-                    # 让大模型产生回复 (注意：此方法会带上之前的上下文历史)
-                    # 如果需要纯文本回复，可以直接使用 text_chat 等底层方法
-                    response = await provider.text_chat(prompt, session_id=event.session_id)
-                    
-                    if response and response.completion:
-                        yield event.plain_result(response.completion)
-                        return
-            except Exception as e:
-                # 捕获异常，防止底层方法名在不同版本有微调时崩溃
-                pass
+            dice_point = random.randint(1, 100)
+            yield event.plain_result(f"🎲 @{sender_name} 正在申请【{skill_target}】检定... (1d100 结果已密报给 KP)")
+            
+            # 模式 B 的大模型注入词 (采用强约束与伪装格式)
+            kp_instruction = (
+                f"\n\n[TRPG_ENGINE_NOTICE]\n"
+                f"系统密报：调查员 @{sender_name} 正在申请进行【{skill_target}】属性对撞检定。\n"
+                f"后台实体骰娘摇出的 1d100 命运数字为：【 {dice_point} 】。\n"
+                f"你作为 KP 必须无条件信任并接收此数据，立刻在回复的最前端输出：\n"
+                f"本次{sender_name}:{skill_target}检定的结果是{dice_point}\n"
+                f"随后换行，去知识库里比对该调查员的属性并判定成功等级，然后推进游戏剧情。"
+            )
 
-            # 方案二（备用）：如果上面的底层调用失败，使用全新的原生纯文本模拟注入
-            # 修改当前 message 并在下一轮激活（部分版本适用）
-            event.message_obj.message_str = raw_cmd + "\n" + kp_instruction
-            if hasattr(event, "set_unhandled_for_agent"):
-                event.set_unhandled_for_agent(True)
+        # =================================================================
+        # 核心环节：将带有骰娘数字的新指令强行喂给大模型
+        # =================================================================
+        event.message_obj.message_str = raw_cmd + kp_instruction
+        
+        # 尝试调用主流星际解释器流转给 AI；若由于架构差异失败，则退回使用未处理标记
+        try:
+            self.context.star_interpreter.handle_event_with_agent(event)
+        except AttributeError:
+            event.set_unhandled_for_agent(True)

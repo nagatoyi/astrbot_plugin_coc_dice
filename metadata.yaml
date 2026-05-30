@@ -1,6 +1,5 @@
 name: astrbot_plugin_coc_dice
 version: "1.1.0"
-author: "您的名字"
+author: "ishu"
 desc: "支持任意多面骰与智能属性检定的双模 LLM 跑团插件"
-# 如果你的插件依赖了特殊的第三方库（比如 numpy 等），可以在下面列出。目前我们的骰子插件只用了 Python 自带库，所以留空即可
 requirements: []

@@ -7,7 +7,8 @@ class TRPGLLMDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    @event_message_type()
+    # 核心修复：使用官方最稳固的 @on(MessageEvent) 来全局捕获消息事件，避免装饰器缺少参数
+    @on(MessageEvent)
     async def on_group_msg(self, event: MessageEvent):
         msg = event.message_str.strip()
         
@@ -45,7 +46,7 @@ class TRPGLLMDicePlugin(Star):
             rolls_detail = " + ".join(map(str, rolls))
             mod_str = f" {modifier_sign} {modifier_val}" if modifier_sign else ""
             
-            # 给出即时的肉眼反馈
+            # 视觉即时反馈
             yield event.plain_result(f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)")
             
             # 构造投喂给大模型的小纸条（追加到消息末尾）

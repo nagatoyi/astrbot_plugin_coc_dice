@@ -1,5 +1,5 @@
 name: astrbot_plugin_coc_dice
-version: 1.1.3
+version: 1.1.4
 author: ishu
 description: 支持任意多面骰与智能属性检定的双模 LLM 跑团插件
 # 关键修复点：务必加上以下两个字段（或至少加上 url）

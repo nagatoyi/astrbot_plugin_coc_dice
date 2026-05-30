@@ -1,15 +1,16 @@
 import random
 import re
 from astrbot.api.all import *
+from astrbot.api.event.filter import *
 
 @register("astrbot_plugin_coc_dice", "ishu", "支持任意多面骰与智能属性检定的双模 LLM 跑团插件", "1.1.0")
 class TRPGLLMDicePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    # 核心修复：使用官方最新版标准的事件类型拦截，传入 EventMessageType.ALL 确保捕获一切消息
+    # 核心修复：最新版标准注解为 event_message_type，配合新版事件实体 AstrMessageEvent
     @event_message_type(EventMessageType.ALL)
-    async def on_group_msg(self, event: MessageEvent):
+    async def on_group_msg(self, event: AstrMessageEvent):
         msg = event.message_str.strip()
         
         # 1. 严格拦截以 "//" 开头的正式游戏指令
@@ -46,10 +47,10 @@ class TRPGLLMDicePlugin(Star):
             rolls_detail = " + ".join(map(str, rolls))
             mod_str = f" {modifier_sign} {modifier_val}" if modifier_sign else ""
             
-            # 视觉即时反馈
+            # 给玩家提供肉眼可见的即时丢骰提示
             yield event.plain_result(f"🎲 @{sender_name} 掷出了 {raw_cmd}... (点数已同步给 KP)")
             
-            # 构造投喂给大模型的小纸条（追加到消息末尾）
+            # 注入大模型上下文的隐形纸条（修改 message_str 后不阻断，继续下发给LLM）
             llm_injection = (
                 f"\n\n【系统绝对指令（KP请执行）】:\n"
                 f"当前调查员 @{sender_name} 进行了纯骰子投掷，公式为：【{raw_cmd}】。\n"
